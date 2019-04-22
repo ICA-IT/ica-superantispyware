@@ -1,0 +1,243 @@
+; Copyright (c) uib gmbh (www.uib.de)
+; This sourcecode is owned by uib
+; and published under the Terms of the General Public License.
+; credits: http://www.opsi.org/en/credits/
+
+[Actions]
+requiredWinstVersion >= "4.11.4.6"
+ScriptErrorMessages=off
+
+DefVar $MsiId$
+DefVar $UninstallProgram$
+DefVar $LogDir$
+DefVar $ProductId$  
+DefVar $MinimumSpace$
+DefVar $InstallDir$
+DefVar $ExitCode$
+DefVar $LicenseRequired$
+DefVar $LicenseKey$
+DefVar $LicensePool$
+DefVar $displayName32$
+DefVar $displayName64$
+DefVar $ProductName$
+DefVar $ProductName2$
+DefVar $ProductName3$
+DefVar $ChromeOfferRegKey$
+DefVar $ToolbarOfferRegKey$
+
+DefStringlist $msilist$
+DefVar $PROP_installmode$
+DefVar $WinVer$
+DefVar $WinSysType$
+DefVar $WinTypeExt$
+Set $WinVer$ = GetMsVersionInfo
+Set $WinSysType$ = GetSystemType
+
+Set $LogDir$ = "%opsiLogDir%"
+set $PROP_installmode$ = GetProductProperty("installmode","full install")
+
+
+; ----------------------------------------------------------------
+; - Please edit the following values                             -
+; ----------------------------------------------------------------
+;$ProductId$ should be the name of the product in opsi
+; therefore please: only lower letters, no umlauts, 
+; no white space use '-' as a seperator
+Set $ProductId$       = "ica-superantispyware"
+Set $ProductName$     = "ICA Super-Anti-Spyware"
+Set $ProductName2$     = "SUPERAntiSpyware"
+Set $ProductName3$     = "SUPERAntiSpyware Free Edition"
+Set $MinimumSpace$    = "100 MB"
+; the path were we find the product after the installation
+Set $InstallDir$      = "%ProgramFiles64Dir%\SUPERAntiSpyware"
+; the following reg keys are used to control the google toolbar and chrome offers
+; if either of these flags expire, the SUPERAntiSpyware install menus change and
+; the autoIt scripts will fail. Therefor, they are both set to a future date prior
+; to running the script.
+Set $ChromeOfferRegKey$ = "HKEY_LOCAL_MACHINE\SOFTWARE\Google\No Chrome Offer Until"
+Set $ToolbarOfferRegKey$ = "HKEY_LOCAL_MACHINE\SOFTWARE\Google\No Toolbar Offer Until"
+
+Set $LicenseRequired$ = "false"
+Set $LicensePool$     = "p_" + $ProductId$
+; ----------------------------------------------------------------
+
+Set $WinTypeExt$ = "x64"
+if ($WinSysType$ = "x86 System")
+    Set $WinTypeExt$ = "x86"   
+endif   
+
+if not(HasMinimumSpace ("%SystemDrive%", $MinimumSpace$))
+	LogError "Not enough space on %SystemDrive%, " + $MinimumSpace$ + " on drive %SystemDrive% needed for " + $ProductId$
+	isFatalError "No Space"
+	; Stop process and set installation status to failed
+else
+	comment "Show product picture"
+	ShowBitmap "%ScriptPath%\" + $ProductId$ + ".png" $ProductId$
+	
+	if FileExists("%ScriptPath%\delsub32.opsiscript")
+		comment "Start uninstall sub section"
+		Sub "%ScriptPath%\delsub32.opsiscript"
+	endif
+	
+	Message "Installing " + $ProductId$ + " ..." + $WinTypeExt$
+
+; case on Install mode ============================================================
+; "copy files only"
+   if ($PROP_installmode$ = "copy files only")
+       comment "Copy files"
+	   Files_install
+	   comment "Create shortcuts"
+	   LinkFolder_install
+       set $ExitCode$ = "0"
+   endif
+; "no install"   
+   if ($PROP_installmode$ = "no install")
+       comment "Skipping... no SUPERAntiSpyware on this computer"
+   	   set $ExitCode$ = "0"
+   endif
+; "full install"    
+   if ($PROP_installmode$ = "full install")
+      comment "Start setup program"
+      ; set the google offer flags in the registry to some future date
+      Registry_SaveGoogleOfferFlags
+      
+      ChangeDirectory "%SCRIPTPATH%"
+      ;----------------------------------------------
+      Winbatch_install
+      ;----------------------------------------------
+      Sub_check_exitcode
+      ; copy over un-install program and set start menu shortcut for it
+      Files_install_nukem
+      ; set shortcut to uninstall
+      LinkFolder_install_nukem
+      ; delete the desktop shotcut for SuperAnti-Spyware
+      LinkFolder_uninstall_nuke
+      ; give SuperAnti-Spyware time to download updates
+      sleepSeconds 10
+      ; force a re-boot
+      ExitWindows /Reboot
+; end of case statement ============================================================  
+   endif
+; end if on files space   
+endif
+
+[Registry_SaveGoogleOfferFlags]
+openKey [$ChromeOfferRegKey$]
+set "SUPERAntiSpyware" = REG_DWORD:20280101
+openKey [$ToolbarOfferRegKey$]
+set "SUPERAntiSpyware" = REG_DWORD:20280101
+
+[Winbatch_install]
+; === Custom Install System ================================================================
+; "%ScriptPath%\SUPERAntiSpyware.exe" /S
+  "%ScriptPath%\superspyware.exe" "%ScriptPath%\SUPERAntiSpyware.exe"
+
+[Files_install]
+; Example of recursively copying some files into the installation directory:
+;
+ copy -s "%ScriptPath%\SUPERAntiSpyware.exe" "$InstallDir$"
+ copy -s "%ScriptPath%\SASUNINST-$WinTypeExt$.EXE" "$InstallDir$"
+
+[Files_install_nukem]
+; over un-install program 
+;
+ copy -s "%ScriptPath%\SASUNINST-$WinTypeExt$.EXE" "$InstallDir$"
+
+[LinkFolder_install]
+; Example of deleting a folder from AllUsers startmenu:
+;
+ set_basefolder common_programs
+ delete_subfolder $ProductName$
+;
+; Example of creating an shortcut to the installed exe in AllUsers startmenu:
+;
+ set_basefolder common_programs
+ set_subfolder $ProductName$
+;
+ set_link
+ 	name: Install SUPERAntiSpyware
+ 	target: $InstallDir$\SUPERAntiSpyware.exe
+; 	parameters:
+ 	working_dir: $InstallDir$
+; 	icon_file: $InstallDir$\SUPERAntiSpyware.exe
+; 	icon_index: 1
+ end_link
+;
+ set_link
+ 	name: Un-Install SUPERAntiSpyware
+ 	target: $InstallDir$\SASUNINST-$WinTypeExt$.EXE
+; 	parameters:
+ 	working_dir: $InstallDir$
+; 	icon_file: $InstallDir$\SASUNINST-$WinTypeExt$.EXEe
+; 	icon_index: 1
+ end_link
+;
+
+[LinkFolder_install_nukem]
+;
+; creat a shortcut to the un-install exe in AllUsers startmenu:
+;
+ set_basefolder common_programs
+ set_subfolder $ProductName2$
+;
+ set_link
+ 	name: Un-Install SUPERAntiSpyware
+ 	target: $InstallDir$\SASUNINST-$WinTypeExt$.EXE
+; 	parameters:
+ 	working_dir: $InstallDir$
+; 	icon_file: $InstallDir$\SASUNINST-$WinTypeExt$.EXEe
+; 	icon_index: 1
+ end_link
+;
+; creat a shortcut to the AlternateStart program in AllUsers startup:
+;
+ set_basefolder common_startup
+ set_subfolder ""
+;
+ set_link
+ 	name: SUPERAntiSpyware Free Edition
+ 	target: $InstallDir$\SUPERAntiSpyware.EXE
+; 	parameters:
+ 	working_dir: $InstallDir$
+; 	icon_file: $InstallDir$\SUPERAntiSpyware.EXE
+; 	icon_index: 1
+ end_link
+;
+
+[LinkFolder_uninstall_nuke]
+;
+; delete shortcut from AllUsers desktop:
+;
+ set_basefolder common_desktopdirectory
+ set_subfolder ""
+ delete_element $ProductName3$
+
+[Sub_check_exitcode]
+comment "Test for installation success via exit code"
+set $ExitCode$ = getLastExitCode
+; informations to exit codes see
+; http://msdn.microsoft.com/en-us/library/aa372835(VS.85).aspx
+; http://msdn.microsoft.com/en-us/library/aa368542.aspx
+if ($ExitCode$ = "0")
+	comment "Looks good: setup program gives exitcode zero"
+else
+	comment "Setup program gives a exitcode unequal zero: " + $ExitCode$
+	if ($ExitCode$ = "1605")
+		comment "ERROR_UNKNOWN_PRODUCT	1605	This action is only valid for products that are currently installed."
+		comment "Uninstall of a not installed product failed - no problem"
+	else
+		if ($ExitCode$ = "1641")
+			comment "looks good: setup program gives exitcode 1641"
+			comment "ERROR_SUCCESS_REBOOT_INITIATED	1641	The installer has initiated a restart. This message is indicative of a success."
+		else
+			if ($ExitCode$ = "3010")
+				comment "looks good: setup program gives exitcode 3010"
+				comment "ERROR_SUCCESS_REBOOT_REQUIRED	3010	A restart is required to complete the install. This message is indicative of a success."
+			else
+				logError "Fatal: Setup program gives an unknown exitcode unequal zero: " + $ExitCode$
+				isFatalError
+			endif
+		endif
+	endif
+endif
+

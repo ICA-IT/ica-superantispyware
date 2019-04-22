@@ -1,0 +1,58 @@
+; Copyright (c) uib gmbh (www.uib.de)
+; This sourcecode is owned by uib gmbh
+; and published under the Terms of the General Public License.
+; credits: http://www.opsi.org/en/credits/
+
+[Actions]
+requiredWinstVersion >= "4.11.4.6"
+ScriptErrorMessages=off
+
+DefVar $MsiId$
+DefVar $UninstallProgram$
+DefVar $LogDir$
+DefVar $ExitCode$
+DefVar $ProductId$
+DefVar $InstallDir$
+DefVar $LicenseRequired$
+DefVar $LicensePool$
+DefVar $displayName32$
+DefVar $displayName64$
+DefVar $ProductName$
+
+DefStringlist $msilist$
+DefVar $PROP_installmode$
+DefVar $WinVer$
+DefVar $WinSysType$
+DefVar $WinTypeExt$
+Set $WinVer$ = GetMsVersionInfo
+Set $WinSysType$ = GetSystemType
+
+Set $LogDir$ = "%opsiLogDir%"
+set $PROP_installmode$ = GetProductProperty("installmode","full install")
+
+; ----------------------------------------------------------------
+; - Please edit the following values                             -
+; ----------------------------------------------------------------
+Set $ProductId$       = "ica-superantispyware"
+Set $ProductName$     = "ICA Super-Anti-Spyware"
+Set $InstallDir$      = "%ProgramFiles64Dir%\SUPERAntiSpyware"
+Set $LicenseRequired$ = "false"
+Set $LicensePool$     = "p_" + $ProductId$
+; ----------------------------------------------------------------
+
+Set $WinTypeExt$ = "x64"
+if ($WinSysType$ = "x86 System")
+    Set $WinTypeExt$ = "x86"   
+endif   
+
+comment "Show product picture"
+ShowBitmap "%ScriptPath%\" + $ProductId$ + ".png" $ProductId$
+
+Message "Uninstalling " + $ProductId$ + " ..." + $WinTypeExt$
+
+if FileExists("%ScriptPath%\delsub32.opsiscript")
+	comment "Start uninstall sub section"
+	Sub "%ScriptPath%\delsub32.opsiscript"
+endif
+
+

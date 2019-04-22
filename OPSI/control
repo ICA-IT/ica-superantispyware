@@ -1,0 +1,37 @@
+[Package]
+version: 1
+depends: 
+
+[Product]
+type: localboot
+id: ica-superantispyware
+name: ICA Super-Anti-Spyware Free Edition
+description: An anti-virus/spyware program
+advice: 
+version: 6.0.0.1254
+priority: 0
+licenseRequired: False
+productClasses: 
+setupScript: setup32.opsiscript
+uninstallScript: uninstall32.opsiscript
+updateScript: 
+alwaysScript: 
+onceScript: 
+customScript: 
+userLoginScript: 
+
+[ProductProperty]
+type: unicode
+name: installmode
+multivalue: True
+editable: False
+description: Install mode
+values: ["copy files only", "full install", "no install"]
+default: ["full install"]
+
+[Changelog]
+ica-superantispyware (1.0-1) stable; urgency=low
+
+Project created with opsi Package Builder 8.2.2
+
+ -- John Kuras <jkuras@islandchristianacademy.com>  Mon, 19 Feb 2018 11:42:09 +0000

@@ -1,0 +1,155 @@
+; Copyright (c) uib gmbh (www.uib.de)
+; This sourcecode is owned by uib gmbh
+; and published under the Terms of the General Public License.
+; credits: http://www.opsi.org/en/credits/
+
+
+;Set $UninstallProgram$ = $InstallDir$ + "\uninstall.exe"
+Set $UninstallProgram$ = $InstallDir$ + "\SASUNINST-" + $WinTypeExt$ + ".EXE"
+;if ($WinSysType$ = "x86 System")
+;    Set $UninstallProgram$ = "%ScriptPath%\SASUNINST-x86.EXE"
+;endif   
+
+
+
+;DefVar $OS$
+DefVar $Flag$
+DefVar $WinstRegKey$
+DefVar $RebootRegVar$
+
+;set $OS$=EnvVar("OS")
+
+;if $OS$="Windows_NT"
+
+  Set $WinstRegKey$ = "HKLM\SOFTWARE\opsi.org\winst"
+  Set $Flag$ = GetRegistryStringValue("["+$WinstRegKey$+"] "+"RebootFlag")
+     LogWarning $ProductId$ + "[" + $WinstRegKey$ + "] RebootFlag initiual value = " + $Flag$
+
+
+Message "Uninstalling " + $ProductId$ + " ..." + $WinTypeExt$
+; case on Install mode ============================================================
+; "copy files only"
+   if ($PROP_installmode$ = "copy files only")
+       Message "Uninstalling " + $ProductId$ + " ..."
+       comment "Deleting files"
+	   Files_uninstall
+	   comment "Deleting shortcuts"
+	   LinkFolder_uninstall
+       set $ExitCode$ = "0"
+   endif
+; "no install"   
+   if ($PROP_installmode$ = "no install")
+  	   set $ExitCode$ = "0"
+   endif
+; "full install"    
+   if ($PROP_installmode$ = "full install")
+      if not ($Flag$ = "1")
+     ;=========================
+     ; Statements BEFORE Reboot
+          Message "Uninstalling " + $ProductId$ + " ..."     
+     ; initialize reboot ...
+          
+          LinkFolder_uninstall_nuke
+          if FileExists($UninstallProgram$)
+	         comment "Uninstall program found, starting uninstall"
+	         Set $Flag$ = "1"
+             Registry_SaveRebootFlag
+             Set $Flag$ = GetRegistryStringValue("["+$WinstRegKey$+"] "+"RebootFlag")
+             if ( $Flag$ = "1" )
+                LogWarning $ProductId$ + "[" + $WinstRegKey$ + "] RebootFlag set to " + $Flag$
+             else
+             	LogError $ProductId$ + "Registry_SaveRebootFlag call not working!  [" + $WinstRegKey$ + "] RebootFlag = " + $Flag$ + " (should == 1)"
+             endif
+	         ; note : the SUPERAntiSpyware uninstall program will reboot the system
+	         Winbatch_uninstall  /WaitforProcessending $UninstallProgram$ /Timeoutseconds 60
+	         sub_check_exitcode
+;	         ExitWindows /Reboot
+             sleepSeconds 30
+          endif
+      else
+     ;=========================
+     ; Statements AFTER Reboot
+     ; set back reboot flag
+          Set $Flag$ = "0"
+          Registry_SaveRebootFlag
+          set $ExitCode$ = "0"
+
+          Set $Flag$ = GetRegistryStringValue("["+$WinstRegKey$+"] "+"RebootFlag")
+          if ( $Flag$ = "0" )
+             LogWarning $ProductId$ + "[" + $WinstRegKey$ + "] RebootFlag set to " + $Flag$
+          else
+             LogError $ProductId$ + "Registry_SaveRebootFlag call not working!  [" + $WinstRegKey$ + "] RebootFlag = " + $Flag$ + " (should == 0)"
+          endif
+
+      endif   
+ ; end of case statement ============================================================  
+   endif
+
+[Registry_SaveRebootFlag]
+openKey [$WinstRegKey$]
+set "RebootFlag" = "$Flag$"
+
+[Winbatch_uninstall]
+; Choose one of the following examples as basis for program uninstall
+;
+; === Nullsoft Scriptable Install System ================================================================
+; maybe better called as
+; Winbatch_uninstall /WaitforProcessending "Au_.exe" /Timeoutseconds 10
+;  "$UninstallProgram$"
+  "%ScriptPath%\superuninstall.exe" "$UninstallProgram$"
+
+[Files_uninstall]
+; Example for recursively deleting the installation directory:
+;
+;  comment "Start files un-install sub section"
+ del -sf "$InstallDir$\"
+
+[LinkFolder_uninstall]
+; Example of deleting a folder from AllUsers startmenu:
+;
+ set_basefolder common_programs
+ delete_subfolder $ProductName$
+;
+; Example of deleting a shortcut from AllUsers desktop:
+;
+ set_basefolder common_desktopdirectory
+ set_subfolder ""
+ delete_element $ProductName$
+
+[LinkFolder_uninstall_nuke]
+;
+; delete the shortcut to the Start program in AllUsers startup:
+;
+ set_basefolder common_startup
+ set_subfolder ""
+ delete_element "SUPERAntiSpyware Free Edition"
+
+[Sub_check_exitcode]
+comment "Test for installation success via exit code"
+set $ExitCode$ = getLastExitCode
+; informations to exit codes see
+; http://msdn.microsoft.com/en-us/library/aa372835(VS.85).aspx
+; http://msdn.microsoft.com/en-us/library/aa368542.aspx
+if ($ExitCode$ = "0")
+	comment "Looks good: setup program gives exitcode zero"
+else
+	comment "Setup program gives a exitcode unequal zero: " + $ExitCode$
+	if ($ExitCode$ = "1605")
+		comment "ERROR_UNKNOWN_PRODUCT	1605	This action is only valid for products that are currently installed."
+		comment "Uninstall of a not installed product failed - no problem"
+	else
+		if ($ExitCode$ = "1641")
+			comment "looks good: setup program gives exitcode 1641"
+			comment "ERROR_SUCCESS_REBOOT_INITIATED	1641	The installer has initiated a restart. This message is indicative of a success."
+		else
+			if ($ExitCode$ = "3010")
+				comment "looks good: setup program gives exitcode 3010"
+				comment "ERROR_SUCCESS_REBOOT_REQUIRED	3010	A restart is required to complete the install. This message is indicative of a success."
+			else
+				logError "Fatal: Setup program gives an unknown exitcode unequal zero: " + $ExitCode$
+				isFatalError
+			endif
+		endif
+	endif
+endif
+
